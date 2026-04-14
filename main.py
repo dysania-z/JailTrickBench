@@ -1,6 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 import datetime
+from copy import deepcopy
 
 
 from utils.utils import load_model_and_tokenizer, set_random_seed
@@ -37,7 +38,7 @@ from baseline.AdvPrompter.AdvPrompter_single_main import (
 )
 from baseline.AmpleGCG.utils import load_target_models_amplegcg
 from baseline.AdvPrompter.utils import load_target_models_advprompter
-from baseline.DrAttack.DrAttack_single_main import DrAttack_initial, DrAttack_single_main, DrAttack_stop
+#from baseline.DrAttack.DrAttack_single_main import DrAttack_initial, DrAttack_single_main, DrAttack_stop
 from baseline.MultiJail.MultiJail_single_main import (
     MultiJail_initial,
     MultiJail_generate_suffix,
@@ -45,10 +46,73 @@ from baseline.MultiJail.MultiJail_single_main import (
 )
 from baseline.MultiJail.utils import load_target_models_MultiJail
 # import defense methods
-from defense import test_smoothLLM, generate_defense_goal
+from defense import (
+    test_smoothLLM,
+    test_output_filter,
+    generate_defense_goal,
+    generate_combined_defense_goal,
+)
 
 # import evaluation agent
 from GPTEvaluatorAgent.agent_eval import agent_evaluation
+
+
+def _parse_autodan_checkpoints(raw_checkpoints, fallback_budget):
+    checkpoints = []
+    if isinstance(raw_checkpoints, str):
+        for token in raw_checkpoints.split(","):
+            token = token.strip()
+            if token.isdigit():
+                val = int(token)
+                if val > 0:
+                    checkpoints.append(val)
+    if fallback_budget > 0:
+        checkpoints.append(fallback_budget)
+    checkpoints = sorted(set(checkpoints))
+    return checkpoints
+
+
+def _emit_autodan_checkpoint_files(args, base_outputs):
+    checkpoints = _parse_autodan_checkpoints(
+        getattr(args, "autodan_budget_checkpoints", ""), args.gcg_attack_budget
+    )
+    if len(checkpoints) == 0:
+        print("No valid AutoDAN checkpoints found, skip emitting checkpoint files.")
+        return
+    full_budget = args.gcg_attack_budget
+    model_name = args.target_model_path.split("/")[-1]
+    original_exp_name = args.exp_name
+    for ckpt in checkpoints:
+        if ckpt == full_budget:
+            continue
+        curr_data = []
+        for item in base_outputs:
+            new_item = deepcopy(item)
+            snapshot_map = item.get("autodan_budget_snapshot_by_step", {})
+            snapshot = snapshot_map.get(str(ckpt)) or snapshot_map.get(ckpt)
+            if snapshot is not None:
+                new_item["adv_prompt"] = snapshot.get("adv_prompt", new_item["adv_prompt"])
+                new_item["language_model_output"] = snapshot.get(
+                    "language_model_output", new_item["language_model_output"]
+                )
+                new_item["attack_iterations"] = snapshot.get(
+                    "attack_iterations", new_item["attack_iterations"]
+                )
+                new_item["is_JB"] = snapshot.get("is_JB", new_item["is_JB"])
+            new_item["is_JB_Agent"] = "None"
+            if "reason" in new_item:
+                del new_item["reason"]
+            if "score" in new_item:
+                del new_item["score"]
+            curr_data.append(new_item)
+        if args.agent_evaluation:
+            curr_data = agent_evaluation(args=args, data=curr_data)
+        args.exp_name = f"budget_autodan_b{ckpt}"
+        save_test_to_file(args=args, instructions=curr_data)
+        print(
+            f"AutoDAN budget checkpoint file emitted: {args.exp_name}_{args.timestamp}_{model_name}.json"
+        )
+    args.exp_name = original_exp_name
 
 
 def generate_attack_result(goal, target, models, device, args, curr_output):
@@ -71,7 +135,7 @@ def generate_attack_result(goal, target, models, device, args, curr_output):
     elif args.attack == "AutoDAN":
         model, tokenizer = models[0], models[1]
         curr_args_dict = vars(args)
-        adv_prompt, model_output, iteration, is_JB = AutoDAN_single_main(
+        adv_prompt, model_output, iteration, is_JB, trace_meta = AutoDAN_single_main(
             args_dict=curr_args_dict,
             target_model=model,
             target_tokenizer=tokenizer,
@@ -82,6 +146,13 @@ def generate_attack_result(goal, target, models, device, args, curr_output):
         curr_output["language_model_output"] = model_output
         curr_output["attack_iterations"] = iteration
         curr_output["is_JB"] = is_JB
+        if trace_meta:
+            curr_output["autodan_budget_first_success_iter"] = trace_meta.get(
+                "first_success_iter"
+            )
+            curr_output["autodan_budget_snapshot_by_step"] = trace_meta.get(
+                "snapshot_by_step", {}
+            )
     elif args.attack == "AmpleGCG":
         model = models[0]
         curr_args_dict = vars(args)
@@ -203,11 +274,23 @@ def generate_attack_result(goal, target, models, device, args, curr_output):
 
 
 def test(goals, targets, models, device, args, all_output=[]):
-    if args.attack == "DrAttack" and args.defense_type in ["self_reminder", "RPO", "smoothLLM"]:
+    if args.attack == "DrAttack" and any(
+        d in args.defense_types for d in ["self_reminder", "RPO", "smoothLLM"]
+    ):
             instruction_name = args.instructions_path.split("/")[-1]
-            pert_goals_path = instruction2dratk_data_path[instruction_name][args.defense_type]
-            # pert_goals = load_pert_goals(pert_goals_path)
+            dt_key = next(d for d in args.defense_types if d in ["self_reminder", "RPO", "smoothLLM"])
+            pert_goals_path = instruction2dratk_data_path[instruction_name][dt_key]
             pert_goals = load_goals(pert_goals_path)
+    elif args.is_combo_defense:
+        pert_goals = [
+            generate_combined_defense_goal(
+                goal_i,
+                defense_types=args.defense_types,
+                pert_type=args.pert_type,
+                smoothllm_pert_pct=args.smoothllm_pert_pct,
+            )
+            for goal_i in goals
+        ]
     else:
         pert_goals = [
             generate_defense_goal(
@@ -236,7 +319,8 @@ def test(goals, targets, models, device, args, all_output=[]):
         ),
         desc="Testing",
     ):
-        print(f"""\n{'=' * 36}\nDefense Method: {args.defense_type}\n{'=' * 36}\n""")
+        defense_label = " + ".join(args.defense_types) if args.is_combo_defense else args.defense_type
+        print(f"""\n{'=' * 36}\nDefense Method: {defense_label}\n{'=' * 36}\n""")
         curr_output = {
             "original_prompt": goal_i,
             "perturbed_prompt": pert_goal_i,
@@ -366,16 +450,32 @@ def main(args):
                 )
     all_output = run(goals, targets, target_model_path, device, args, all_output)
 
-    # test smoothLLM
-    if args.defense_type == "smoothLLM" and args.attack != "DrAttack":
+    # post-processing defenses (order: smoothLLM → output_filter)
+    _use_smooth = "smoothLLM" in args.defense_types and args.attack != "DrAttack"
+    _use_output_filter = (
+        "output_filter" in args.defense_types
+        or getattr(args, "output_filter", False)
+    )
+
+    if _use_smooth:
         final_all_output = test_smoothLLM(all_output, args)
     else:
         print(f"""\n{'=' * 36}\nNo SmoothLLM Test\n{'=' * 36}\n""")
         final_all_output = all_output
 
+    if _use_output_filter:
+        final_all_output = test_output_filter(final_all_output, args)
+    else:
+        print(f"""\n{'=' * 36}\nNo Output Filter\n{'=' * 36}\n""")
+
     # agent evaluation
     if args.agent_evaluation:
-        final_all_output = load_split_file_whole(args)
+        if args.data_split:
+            final_all_output = load_split_file_whole(args)
+        else:
+            final_all_output, _ = load_test_from_file(args)
+            if not final_all_output:
+                final_all_output = all_output
         if len(final_all_output) != len(goals):
             print(
                 "Find the final_all_output is not equal to the goals, skip the agent evaluation"
@@ -397,6 +497,13 @@ def main(args):
         final_all_output = agent_evaluation(args=args, data=final_all_output)
         save_test_to_file(args=args, instructions=final_all_output)
         print(f"""\n{'=' * 36}\nFinish Agent Evaluation\n{'=' * 36}\n""")
+
+    if (
+        args.attack == "AutoDAN"
+        and getattr(args, "autodan_budget_track_mode", False)
+        and getattr(args, "autodan_budget_emit_files", False)
+    ):
+        _emit_autodan_checkpoint_files(args=args, base_outputs=all_output)
 
 
 if __name__ == "__main__":

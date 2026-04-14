@@ -4,6 +4,8 @@
 .vscode/
 .DS_Store
 
+utils/deepseek_local.py
+
 __pycache__/
 *.pyc
 *.pkl
@@ -14,10 +16,15 @@ __pycache__/
 
 exp_results/*
 exp_logs/*
+prevResult/
 wandb/
 # scripts/
 models/
 
+Miniconda*.sh
+
+# vendored fastchat clone contains nested .git; use submodule or copy without .git
+src/fschat/
 
 !.gitkeep
 !baseline/AutoDAN/assets/*

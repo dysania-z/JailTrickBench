@@ -2,18 +2,18 @@
 set -e
 
 # lora
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 accelerate launch \
+CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch \
     --config_file ../../examples/accelerate/single_config.yaml \
-    ../../src/train.py \
+    ../../src/train_bash.py \
     --stage sft \
     --do_train \
-    --model_name_or_path meta-llama/Llama-2-7b-chat-hf \
+    --model_name_or_path /home/ubuntu/data/models/defense/Llama-2-7b-chat-hf \
     --dataset safety_training_data \
     --dataset_dir ../../data \
     --template llama2 \
     --finetuning_type lora \
     --lora_target q_proj,v_proj \
-    --output_dir ../../saves/bag_of_trick/LLaMA2-7B/lora/Llama-2-70b-chat-hf_safety_training_lora_8ep \
+    --output_dir ../../saves/bag_of_trick/LLaMA2-7B/lora/Llama-2-7b-chat-hf_safety_training_lora_8ep \
     --overwrite_cache \
     --overwrite_output_dir \
     --cutoff_len 4096 \
@@ -37,12 +37,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 accelerate launch \
 
 
 
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 llamafactory-cli export \
-    --model_name_or_path meta-llama/Llama-2-7b-chat-hf \
-    --adapter_name_or_path .../../saves/bag_of_trick/LLaMA2-7B/lora/Llama-2-70b-chat-hf_safety_training_lora_8ep \
+CUDA_VISIBLE_DEVICES=0,1,2,3 python ../../src/export_model.py \
+    --model_name_or_path /home/ubuntu/data/models/defense/Llama-2-7b-chat-hf \
+    --adapter_name_or_path ../../saves/bag_of_trick/LLaMA2-7B/lora/Llama-2-7b-chat-hf_safety_training_lora_8ep \
     --template llama2 \
     --finetuning_type lora \
-    --export_dir .../../saves/at_transfer/LLaMA2-7B/merged/Llama-2-70b-chat-hf_safety_training_lora_8ep \
+    --export_dir ../../saves/at_transfer/LLaMA2-7B/merged/Llama-2-7b-chat-hf_safety_training_lora_8ep \
     --export_size 2 \
     --export_device cpu \
     --export_legacy_format False

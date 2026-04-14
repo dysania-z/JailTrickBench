@@ -13,7 +13,7 @@ PREDIXES = test_prefixes
 
 
 def load_judge(args):
-    if "gpt" in args.judge_model:
+    if "gpt" in args.judge_model or "deepseek" in args.judge_model:
         return GPTJudge(args)
     elif args.judge_model == "no-judge":
         return NoJudge(args)
@@ -88,6 +88,10 @@ class NoJudge(JudgeBase):
 class GPTJudge(JudgeBase):
     def __init__(self, args):
         super(GPTJudge, self).__init__(args)
+        # 如果是gpt模型名，强制改为deepseek-chat
+        if "gpt" in self.judge_name:
+            print(f"[INFO] Judge模型从 {self.judge_name} 改为 deepseek-chat")
+            self.judge_name = "deepseek-chat"
         self.judge_model = ChatGPT(model_name=self.judge_name)
 
     def create_conv(self, full_prompt):
@@ -116,6 +120,10 @@ class GPTJudge(JudgeBase):
 class GPTAgentJudge(JudgeBase):
     def __init__(self, args):
         super(GPTAgentJudge, self).__init__(args)
+        # 与 GPTJudge 一致：命令行仍为 gpt-4 等时，实际请求 DeepSeek Chat API
+        if "gpt" in self.judge_name:
+            print(f"[INFO] Agent 判官模型从 {self.judge_name} 改为 deepseek-chat")
+            self.judge_name = "deepseek-chat"
         self.judge_model = ChatGPT(model_name=self.judge_name)
 
     def create_conv(self, full_prompt):

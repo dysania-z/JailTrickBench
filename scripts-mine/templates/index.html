@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>攻防对抗可视化工具箱</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
+        body { background: #f5f7fa; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { max-width: 1200px; width: 100%; background: white; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); padding: 30px; }
+        h1 { margin-top: 0; color: #1e293b; font-weight: 600; }
+        h2 { font-size: 1.3rem; color: #334155; margin: 1.5rem 0 1rem; border-left: 5px solid #3b82f6; padding-left: 15px; }
+        
+        /* 选项卡导航 */
+        .tab-nav { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        .tab-btn { background: none; border: none; padding: 10px 20px; font-size: 1.1rem; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 40px 40px 0 0; transition: all 0.2s; }
+        .tab-btn:hover { color: #1e293b; background: #f1f5f9; }
+        .tab-btn.active { color: #3b82f6; border-bottom: 3px solid #3b82f6; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card { background: #f8fafc; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+        .btn { background: white; border: 1px solid #cbd5e1; border-radius: 40px; padding: 10px 20px; font-size: 0.95rem; font-weight: 500; color: #1e293b; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+        .btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .btn.primary { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .btn.primary:hover { background: #2563eb; }
+        select, input[type="file"] { width: 100%; padding: 12px 15px; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 1rem; margin: 10px 0; }
+        
+        .output-box {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow: auto;
+            resize: both;
+            min-height: 200px;
+            max-height: 70vh;
+            border: 1px solid #334155;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            margin-top: 20px;
+        }
+
+        .output-box::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .output-box::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .output-box::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 5px;
+        }
+        .output-box::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .flex-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .label { font-weight: 600; color: #475569; margin-right: 10px; }
+        hr { border: none; border-top: 2px dashed #e2e8f0; margin: 30px 0; }
+        .badge { background: #e2e8f0; color: #334155; border-radius: 40px; padding: 5px 12px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚔️ 攻防对抗可视化工具箱</h1>
+    <p class="badge">脚本自动匹配 · 实时输出 · 支持自定义</p>
+
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="attack">🎯 攻击工具箱</button>
+        <button class="tab-btn" data-tab="defense">🛡️ 一键防御测试</button>
+        <button class="tab-btn" data-tab="custom">📤 自定义脚本</button>
+    </div>
+
+    <div id="tab-attack" class="tab-content active">
+        <div class="card">
+            <div style="font-weight: 600; margin-bottom: 10px;">攻击方法</div>
+            <div class="btn-group" id="attack-group">
+                <button class="btn attack-option" data-attack="gcg">GCG</button>
+                <button class="btn attack-option" data-attack="autodan">AutoDAN</button>
+                <button class="btn attack-option" data-attack="pair">PAIR</button>
+            </div>
+            <div style="font-weight: 600; margin: 20px 0 10px;">防御模块</div>
+            <select id="defense-select">
+                <option value="none">无防御 (None)</option>
+                <option value="smoothllm">SmoothLLM</option>
+                <option value="selfreminder">Self-Reminder</option>
+                <option value="safetytraining">SafetyTraining</option>
+            </select>
+            <button class="btn primary" style="width: 100%; margin-top: 20px;" id="run-attack">▶ 运行攻击（实时）</button>
+        </div>
+    </div>
+
+    <div id="tab-defense" class="tab-content">
+        <div class="card">
+            <div style="font-weight: 600; margin-bottom: 10px;">环境测试 (一键防御测试)</div>
+            <div class="btn-group" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                <!-- 攻击预算组合块：按钮 + 下方选择框 -->
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <button class="btn env-btn" data-env="budget">攻击预算</button>
+                    <select id="budget-attack-method" style="width: 100%; padding: 8px 12px; border-radius: 40px;">
+                        <option value="pair">PAIR</option>
+                        <option value="autodan">GCG</option>
+                    </select>
+                </div>
+                <!-- 其他独立按钮 -->
+                <button class="btn env-btn" data-env="capability">攻击者能力</button>
+                <button class="btn env-btn" data-env="alignment">微调对齐</button>
+                <button class="btn env-btn" data-env="system_prompt">模型大小</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-custom" class="tab-content">
+        <div class="card">
+            <div style="font-weight: 600; margin-bottom: 10px;">上传自定义攻击脚本</div>
+            <input type="file" id="script-file" accept=".sh">
+            <div class="flex-row" style="margin-top: 15px;">
+                <button class="btn" id="upload-script">上传</button>
+                <button class="btn" id="run-uploaded">运行上传的脚本</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <div class="card" style="background: none; border: none; padding: 0;">
+            <div style="font-weight: 600; margin-bottom: 10px;">🧠 实时攻防对抗（演示）</div>
+            <p style="color: #64748b; font-size: 0.9rem;">模拟模型思考过程：中间层激活值、注意力分布等</p>
+            <button class="btn primary" id="run-virtual" style="width: 200px;">启动实时演示</button>
+        </div>
+        <h2>📋 执行输出</h2>
+        <div class="output-box" id="output">等待操作……</div>
+    </div>
+</div>
+
+<script>
+    // 选项卡切换逻辑
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const tabId = btn.dataset.tab;
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        });
+    });
+
+    // 当前选中的攻击方法
+    let currentAttack = 'gcg';
+    document.querySelectorAll('.attack-option').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.attack-option').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentAttack = this.dataset.attack;
+        });
+    });
+    document.querySelector('.attack-option').classList.add('active');
+
+    // 清空输出框
+    function clearOutput() {
+        document.getElementById('output').innerText = '';
+    }
+
+    // 显示输出（追加到底部，自动滚动），增加 addTimestamp 参数
+    function appendOutput(text, isError = false, addTimestamp = true) {
+        const out = document.getElementById('output');
+        const timestamp = addTimestamp ? `[${new Date().toLocaleTimeString()}] ` : '';
+        out.innerText += (out.innerText ? '\n' : '') + timestamp + text;
+        out.scrollTop = out.scrollHeight;
+    }
+
+    // 通用请求函数（用于非流式接口）
+    async function postJSON(url, data) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            return await response.json();
+        } catch (e) {
+            appendOutput('网络请求失败：' + e.message, true);
+            return null;
+        }
+    }
+
+    // ---------- 流式攻击运行 ----------
+    let attackEventSource = null;  // 攻击流式连接
+
+    document.getElementById('run-attack').addEventListener('click', () => {
+        if (attackEventSource) {
+            attackEventSource.close();
+            attackEventSource = null;
+        }
+        clearOutput();
+        const defense = document.getElementById('defense-select').value;
+        const url = `/stream_run_attack?attack=${encodeURIComponent(currentAttack)}&defense=${encodeURIComponent(defense)}`;
+        
+        appendOutput(`⏳ 开始流式执行：${currentAttack} + 防御 ${defense} ...`, false, true);
+
+        const es = new EventSource(url);
+        attackEventSource = es;
+
+        es.onmessage = (event) => {
+            appendOutput(event.data, false, false);
+        };
+
+        es.addEventListener('start', (e) => {}); // 忽略
+
+        es.addEventListener('end', (e) => {
+            appendOutput(`✅ ${e.data}`, false, true);
+            es.close();
+            attackEventSource = null;
+        });
+
+        es.addEventListener('error', (e) => {
+            if (e.data) {
+                appendOutput(`❌ ${e.data}`, true, true);
+            } else {
+                appendOutput('连接错误或脚本执行中断', true, true);
+            }
+            es.close();
+            attackEventSource = null;
+        });
+
+        es.onerror = (e) => {
+            if (es.readyState === EventSource.CLOSED) {
+                appendOutput('连接已关闭', true, true);
+                attackEventSource = null;
+            }
+        };
+    });
+
+    // ---------- 流式环境测试运行 ----------
+    let envEventSource = null;  // 环境测试流式连接
+
+    document.querySelectorAll('.env-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (envEventSource) {
+                envEventSource.close();
+                envEventSource = null;
+            }
+            clearOutput();
+            const env = btn.dataset.env;
+            let url = `/stream_run_environment?env_type=${encodeURIComponent(env)}`;
+            if (env === 'budget') {
+                const method = document.getElementById('budget-attack-method').value;
+                url += `&attack_method=${encodeURIComponent(method)}`;
+            }
+
+            appendOutput(`⏳ 开始流式执行环境测试：${env} ...`, false, true);
+
+            const es = new EventSource(url);
+            envEventSource = es;
+
+            es.onmessage = (event) => {
+                appendOutput(event.data, false, false);
+            };
+
+            es.addEventListener('start', (e) => {});
+
+            es.addEventListener('end', (e) => {
+                appendOutput(`✅ ${e.data}`, false, true);
+                es.close();
+                envEventSource = null;
+            });
+
+            es.addEventListener('error', (e) => {
+                if (e.data) {
+                    appendOutput(`❌ ${e.data}`, true, true);
+                } else {
+                    appendOutput('连接错误或脚本执行中断', true, true);
+                }
+                es.close();
+                envEventSource = null;
+            });
+
+            es.onerror = (e) => {
+                if (es.readyState === EventSource.CLOSED) {
+                    appendOutput('连接已关闭', true, true);
+                    envEventSource = null;
+                }
+            };
+        });
+    });
+
+    // 上传脚本
+    document.getElementById('upload-script').addEventListener('click', async () => {
+        clearOutput();
+        const fileInput = document.getElementById('script-file');
+        if (fileInput.files.length === 0) {
+            alert('请先选择脚本文件');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        appendOutput(`⏳ 上传脚本：${fileInput.files[0].name} ...`);
+        try {
+            const response = await fetch('/upload_script', { method: 'POST', body: formData });
+            const result = await response.json();
+            appendOutput(result.output);
+        } catch (e) {
+            appendOutput('上传失败：' + e.message, true);
+        }
+    });
+
+    // 运行上传的脚本
+    let uploadedEventSource = null;  // 用于自定义脚本的流式连接
+    // 运行上传的脚本（流式）
+    document.getElementById('run-uploaded').addEventListener('click', () => {
+        if (uploadedEventSource) {
+            uploadedEventSource.close();
+            uploadedEventSource = null;
+        }
+        clearOutput();
+        appendOutput('⏳ 开始流式执行上传的脚本 ...', false, true);
+
+        const es = new EventSource('/stream_run_uploaded');
+        uploadedEventSource = es;
+
+        es.onmessage = (event) => {
+            appendOutput(event.data, false, false);   // 不加时间戳，保持行内容纯净
+        };
+
+        es.addEventListener('start', (e) => {
+            // 可忽略，或自行处理
+        });
+
+        es.addEventListener('end', (e) => {
+            appendOutput(`✅ ${e.data}`, false, true);
+            es.close();
+            uploadedEventSource = null;
+        });
+
+        es.addEventListener('error', (e) => {
+            if (e.data) {
+                appendOutput(`❌ ${e.data}`, true, true);
+            } else {
+                appendOutput('连接错误或脚本执行中断', true, true);
+            }
+            es.close();
+            uploadedEventSource = null;
+        });
+
+        es.onerror = (e) => {
+            if (es.readyState === EventSource.CLOSED) {
+                appendOutput('连接已关闭', true, true);
+                uploadedEventSource = null;
+            }
+        };
+    });
+
+    // 实时演示（仍使用一次性输出，可自行改为流式）
+    document.getElementById('run-virtual').addEventListener('click', async () => {
+        clearOutput();
+        appendOutput('⏳ 启动实时攻防演示 ...');
+        const result = await postJSON('/run_virtual', {});
+        if (result) {
+            appendOutput(result.success ? '✅ 演示完成' : '❌ 演示失败');
+            appendOutput(result.output);
+        }
+    });
+</script>
+</body>
+</html>

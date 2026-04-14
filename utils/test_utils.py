@@ -24,7 +24,21 @@ defense_rename = {
     "smoothLLM": "5smoothLLM",
     "safety_tuning": "6safety_tuning",
     "adv_training_noaug": "7adv_training_noaug",
+    "output_filter": "8output_filter",
 }
+
+
+def get_defense_rename(defense_type_str):
+    """Return a path-friendly defense label that supports combo defenses.
+
+    For single defense (e.g. 'smoothLLM') returns '5smoothLLM'.
+    For combo (e.g. 'safety_tuning,self_reminder') returns
+    'combo_safety_tuning+self_reminder'.
+    """
+    parts = [d.strip() for d in defense_type_str.split(",") if d.strip()]
+    if len(parts) == 1:
+        return defense_rename[parts[0]]
+    return "combo_" + "+".join(parts)
 
 rename_attack = {
     "1AutoDAN": "AutoDAN",
@@ -45,6 +59,7 @@ rename_defense = {
     "5smoothLLM": "smoothLLM",
     "6safety_tuning": "safety_tuning",
     "7adv_training_noaug": "adv_training_noaug",
+    "8output_filter": "output_filter",
 }
 
 instruction2dratk_data_path = {
@@ -97,6 +112,8 @@ def get_template_name(model_path):
         template_name = "qwen"
     elif "mistral" in model_path:
         template_name = "mistral"
+    elif "deepseek" in model_path:
+        template_name = "gpt-3.5-turbo"
     else:
         raise NameError
     return template_name
@@ -109,11 +126,11 @@ def load_test_from_file_split(args):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     exp_name = args.exp_name
     path_name = (
         os.path.join(
-            args.save_result_path, "split", dataset_name, defense_type, attack_type, exp_name
+            args.save_result_path, "split", defense_type, attack_type
         )
         + "/"
     )
@@ -157,11 +174,11 @@ def load_test_from_file(args):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     exp_name = args.exp_name
     path_name = (
         os.path.join(
-            args.save_result_path, dataset_name, defense_type, attack_type, exp_name
+            args.save_result_path, defense_type, attack_type
         )
         + "/"
     )
@@ -169,10 +186,7 @@ def load_test_from_file(args):
     if not os.path.exists(path_name) or len(os.listdir(path_name)) == 0:
         return [], new_timestamp
     if len(os.listdir(path_name)) > 1:
-        # there are multiple files
-        file_name_prefix = (
-            f"defense_{args.defense_type}__{model_name}__attack_{args.attack}"
-        )
+        file_name_prefix = f"{exp_name}_"
         print("try to locate the file with the same prefix as: ", file_name_prefix)
         candidate_files = os.listdir(path_name)
         candidate_files = [f for f in candidate_files if f.startswith(file_name_prefix)]
@@ -184,7 +198,11 @@ def load_test_from_file(args):
     else:
         print("Only one file in the directory")
         file_name = os.listdir(path_name)[-1]
-    new_timestamp = file_name[-19:-5]
+    base = file_name[:-5]
+    if base.startswith(f"{exp_name}_") and base.endswith(model_name):
+        new_timestamp = base[len(exp_name)+1:-(len(model_name)+1)]
+    else:
+        new_timestamp = ""
     with open(path_name + file_name, "r") as file:
         print("Loading from file: ", path_name + file_name)
         instructions = json.load(file)
@@ -197,13 +215,13 @@ def save_test_to_file(args, instructions):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     exp_name = args.exp_name
     file_name_adv_prompt = (
-        f"defense_{args.defense_type}__{model_name}__attack_{args.attack}__{timestamp}"
+        f"{exp_name}_{timestamp}_{model_name}"
     )
     path_name = (
-        os.path.join(args.save_result_path, dataset_name, defense_type, attack_type, exp_name)
+        os.path.join(args.save_result_path, defense_type, attack_type)
         + "/"
     )
     file_name = file_name_adv_prompt + ".json"
@@ -220,13 +238,13 @@ def save_test_to_file_split(args, instruction):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     idx = instruction["data_id"]
     file_name_adv_prompt = f"{idx}_defense_{args.defense_type}__{model_name}__attack_{args.attack}__{timestamp}"
     exp_name = args.exp_name
     path_name = (
         os.path.join(
-            args.save_result_path, "split", dataset_name, defense_type, attack_type, exp_name
+            args.save_result_path, "split", defense_type, attack_type
         )
         + "/"
     )
@@ -245,11 +263,11 @@ def load_split_file_single(args, idx):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     exp_name = args.exp_name
     path_name = (
         os.path.join(
-            args.save_result_path, "split", dataset_name, defense_type, attack_type, exp_name
+            args.save_result_path, "split", defense_type, attack_type
         )
         + "/"
     )
@@ -286,11 +304,11 @@ def load_split_file_whole(args):
     dataset_name = instructions_path.split("/")[-1].split(".")[0]
     model_name = args.target_model_path.split("/")[-1]
     attack_type = attack_rename[args.attack]
-    defense_type = defense_rename[args.defense_type]
+    defense_type = get_defense_rename(args.defense_type)
     exp_name = args.exp_name
     path_name = (
         os.path.join(
-            args.save_result_path, "split", dataset_name, defense_type, attack_type, exp_name
+            args.save_result_path, "split", defense_type, attack_type
         )
         + "/"
     )
@@ -357,3 +375,12 @@ def re_calculate_asr(instructions):
             item["is_JB_recal"] = False
         output.append(item)
     return output
+
+# def text_process(model_response):
+#     model_response = remove_emoji(model_response)
+#     model_response = remove_code_blocks(model_response)
+#     model_response = model_response.replace("```", "")
+#     model_response = model_response.replace("#!/bin/bash", "")
+#     model_response = model_response.replace("os", "")
+#     model_response = model_response.replace("if __name__ == '__main__':", "")
+#     return model_response

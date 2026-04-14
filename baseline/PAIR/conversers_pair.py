@@ -73,6 +73,9 @@ class AttackLM_pair:
         if model_name in ["gpt-3.5-turbo", "gpt-4"]:
             self.model = GPT(model_name)
             self.template = get_template_name(model_name)
+        elif model_name in ["deepseek-chat", "deepseek-coder"]:  # 新增DeepSeek支持
+            self.model = GPT(model_name)  # 使用GPT类，但模型名改为deepseek-chat
+            self.template = get_template_name(model_name)
         elif "vicuna" in model_name.lower() or "llama" in model_name.lower():
             if "70b" in model_name.lower() or "13b" in model_name.lower():
                 quantization_config = BitsAndBytesConfig(load_in_4bit=True)
@@ -138,7 +141,7 @@ class AttackLM_pair:
         for conv, prompt in zip(convs_list, prompts_list):
             conv.append_message(conv.roles[0], prompt)
             # Get prompts
-            if "gpt" in self.model_name:
+            if "gpt" in self.model_name or "deepseek" in self.model_name:
                 full_prompts.append(conv.to_openai_api_messages())
             else:
                 conv.append_message(conv.roles[1], init_message)
@@ -166,7 +169,7 @@ class AttackLM_pair:
             new_indices_to_regenerate = []
             for i, full_output in enumerate(outputs_list):
                 orig_index = indices_to_regenerate[i]
-                if "gpt" not in self.model_name:
+                if "gpt" not in self.model_name and "deepseek" not in self.model_name:
                     full_output = init_message + full_output
 
                 attack_dict, json_str = common.extract_json(full_output)
@@ -266,7 +269,7 @@ class TargetLM_pair:
         full_prompts = []
         for conv, prompt in zip(convs_list, prompts_list):
             conv.append_message(conv.roles[0], prompt)
-            if "gpt" in self.model_name:
+            if "gpt" in self.model_name or "deepseek" in self.model_name:
                 # Openai does not have separators
                 full_prompts.append(conv.to_openai_api_messages())
             elif "palm" in self.model_name:

@@ -90,7 +90,7 @@ def initialize_args():
     parser.add_argument(
         "--gcg_attack_budget",
         type=int,
-        default=500,
+        default=200,
         help="The attack budget for token-level attacks including GCG and AutoDAN",
     )
     parser.add_argument(
@@ -139,16 +139,16 @@ def initialize_args():
         "--defense_type",
         type=str,
         default="smoothLLM",
-        choices=[
-            "None_defense",
-            "self_reminder",
-            "RPO",
-            "unlearn",
-            "smoothLLM",
-            "safety_tuning",
-            "adv_training_noaug",
-        ],
-        help="The defense methods ofr LLM",
+        help="Defense method(s) for LLM. Supports comma-separated combination, "
+             "e.g. 'safety_tuning,self_reminder,smoothLLM,output_filter'. "
+             "Valid values: None_defense, self_reminder, RPO, unlearn, smoothLLM, "
+             "safety_tuning, adv_training_noaug, output_filter.",
+    )
+    parser.add_argument(
+        "--output_filter",
+        action="store_true",
+        help="Enable output safety filter (keyword/regex-based). "
+             "Can be combined with any --defense_type for layered defense.",
     )
     parser.add_argument(
         "--pert_type",
@@ -203,6 +203,22 @@ def initialize_args():
         ],
         help="The model used to mutate",
     )
+    parser.add_argument(
+        "--autodan_budget_track_mode",
+        action="store_true",
+        help="AutoDAN budget experiment mode: disable early stop and keep snapshots at checkpoints.",
+    )
+    parser.add_argument(
+        "--autodan_budget_checkpoints",
+        type=str,
+        default="1,5,10,50",
+        help="Comma-separated checkpoints (1-based) to export as pseudo budget files in AutoDAN budget mode.",
+    )
+    parser.add_argument(
+        "--autodan_budget_emit_files",
+        action="store_true",
+        help="When budget track mode is enabled, emit extra result files for each checkpoint budget.",
+    )
 
     ##################################################
     ########### PAIR parameters ##########
@@ -247,8 +263,13 @@ def initialize_args():
         choices=[
             "gpt-3.5-turbo",
             "gpt-4",
+            "deepseek-chat",
             "lmsys/vicuna-13b-v1.5",
             "meta-llama/Llama-2-13b-chat-hf",
+            "/home/ubuntu/data/models/vicuna-7b-v1.5",
+            "/home/ubuntu/data/models/defense/Llama-2-7b-chat-hf",
+            "/home/ubuntu/data/models/Llama-2-13b-chat-hf",
+            "/home/ubuntu/data/models/vicuna-13b-v1.5" 
         ],
     )
     parser.add_argument(
@@ -394,4 +415,16 @@ def initialize_args():
     ##################################################
 
     args = parser.parse_args()
+
+    _VALID_DEFENSES = {
+        "None_defense", "self_reminder", "RPO", "unlearn",
+        "smoothLLM", "safety_tuning", "adv_training_noaug",
+        "output_filter", "primeguard",
+    }
+    args.defense_types = [d.strip() for d in args.defense_type.split(",") if d.strip()]
+    for d in args.defense_types:
+        if d not in _VALID_DEFENSES:
+            parser.error(f"Unknown defense type: '{d}'. Valid: {sorted(_VALID_DEFENSES)}")
+    args.is_combo_defense = len(args.defense_types) > 1
+
     return args

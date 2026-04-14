@@ -12,6 +12,7 @@ import re
 import emoji
 
 from utils.test_utils import process_response
+from utils.llm_api_env import get_deepseek_api_key, get_deepseek_chat_completions_url
 
 # def text_process(model_response):
 #     model_response = emoji.replace_emoji(model_response, replace='')
@@ -115,9 +116,11 @@ class GPT(LanguageModel):
     API_QUERY_SLEEP = 0.5
     API_MAX_RETRY = 2000
     API_TIMEOUT = 20
-    # openai.api_key = os.getenv("OPENAI_API_KEY")
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": "YOUR_KEY_HERE"}
+
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.api_key = get_deepseek_api_key()
+        self.url = get_deepseek_chat_completions_url()
 
     def generate(
         self, conv: List[Dict], max_n_tokens: int, temperature: float, top_p: float
@@ -132,8 +135,15 @@ class GPT(LanguageModel):
             str: generated response
         """
         output = self.API_ERROR_OUTPUT
+        if not self.api_key:
+            raise RuntimeError(
+                "未设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，无法调用 PAIR 云端模型。"
+            )
         url = self.url
-        headers = self.headers
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
         # filter text
         for i in range(len(conv)):
             if "content" in conv[i]:

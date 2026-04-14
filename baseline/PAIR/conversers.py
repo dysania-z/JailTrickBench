@@ -94,7 +94,7 @@ class AttackLM:
         for conv, prompt in zip(convs_list, prompts_list):
             conv.append_message(conv.roles[0], prompt)
             # Get prompts
-            if "gpt" in self.model_name:
+            if "gpt" in self.model_name or "deepseek" in self.model_name:
                 full_prompts.append(conv.to_openai_api_messages())
             else:
                 conv.append_message(conv.roles[1], init_message)
@@ -175,7 +175,7 @@ class TargetLM:
         full_prompts = []
         for conv, prompt in zip(convs_list, prompts_list):
             conv.append_message(conv.roles[0], prompt)
-            if "gpt" in self.model_name:
+            if "gpt" in self.model_name or "deepseek" in self.model_name:
                 # Openai does not have separators
                 full_prompts.append(conv.to_openai_api_messages())
             elif "palm" in self.model_name:
@@ -196,6 +196,8 @@ class TargetLM:
 def load_indiv_model(model_name, device=None):
     model_path, template = get_model_path_and_template(model_name)
     if model_name in ["gpt-3.5-turbo", "gpt-4"]:
+        lm = GPT(model_name)
+    elif model_name in ["deepseek-chat", "deepseek-reasoner"]:
         lm = GPT(model_name)
     elif model_name in ["claude-2", "claude-instant-1"]:
         lm = Claude(model_name)
@@ -229,6 +231,7 @@ def get_model_path_and_template(model_name):
     full_model_dict = {
         "gpt-4": {"path": "gpt-4", "template": "gpt-4"},
         "gpt-3.5-turbo": {"path": "gpt-3.5-turbo", "template": "gpt-3.5-turbo"},
+        "deepseek-chat":{"path": "deepseek-chat", "template": "deepseek-chat"},
         "vicuna": {"path": VICUNA_PATH, "template": "vicuna_v1.1"},
         "llama-2": {"path": LLAMA_PATH, "template": "llama-2"},
         "claude-instant-1": {

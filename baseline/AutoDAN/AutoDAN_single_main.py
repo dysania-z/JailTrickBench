@@ -122,6 +122,17 @@ def AutoDAN_single_main(args_dict, target_model, target_tokenizer, goal, target)
     mutation = args.mutation
     API_key = args.gpt_mutate
     allow_non_ascii = False
+    budget_track_mode = getattr(args, "autodan_budget_track_mode", False)
+    checkpoint_str = getattr(args, "autodan_budget_checkpoints", "")
+    checkpoints = set()
+    if budget_track_mode and isinstance(checkpoint_str, str):
+        for token in checkpoint_str.split(","):
+            token = token.strip()
+            if token.isdigit():
+                step = int(token)
+                if step > 0:
+                    checkpoints.add(step)
+    checkpoints.add(num_steps)
 
     model = target_model
     tokenizer = target_tokenizer
@@ -153,6 +164,12 @@ def AutoDAN_single_main(args_dict, target_model, target_tokenizer, goal, target)
     new_adv_suffixs = reference[:batch_size]
     word_dict = {}
     last_loss = 1e-5
+    snapshot_by_step = {}
+    first_success_iter = None
+    first_success_payload = None
+    adv_suffix = ""
+    gen_str = ""
+    is_success = False
     for j in range(num_steps):
         with torch.no_grad():
             epoch_start_time = time.time()
@@ -235,8 +252,56 @@ def AutoDAN_single_main(args_dict, target_model, target_tokenizer, goal, target)
 
             last_loss = current_loss.item()
 
-            if is_success:
-                return adv_suffix, gen_str, j, is_success
+            step_idx = j + 1
+            if step_idx in checkpoints:
+                snapshot_by_step[step_idx] = {
+                    "adv_prompt": adv_suffix,
+                    "language_model_output": gen_str,
+                    "attack_iterations": j,
+                    "is_JB": bool(is_success),
+                }
+
+            if is_success and first_success_iter is None:
+                first_success_iter = step_idx
+                first_success_payload = {
+                    "adv_prompt": adv_suffix,
+                    "language_model_output": gen_str,
+                    "attack_iterations": j,
+                    "is_JB": True,
+                }
+
+            if is_success and not budget_track_mode:
+                return adv_suffix, gen_str, j, is_success, {}
             gc.collect()
             torch.cuda.empty_cache()
-    return adv_suffix, gen_str, j, is_success
+
+    if budget_track_mode:
+        if first_success_payload is not None:
+            final_payload = first_success_payload
+        else:
+            final_payload = {
+                "adv_prompt": adv_suffix,
+                "language_model_output": gen_str,
+                "attack_iterations": num_steps - 1,
+                "is_JB": False,
+            }
+        if num_steps not in snapshot_by_step:
+            snapshot_by_step[num_steps] = {
+                "adv_prompt": adv_suffix,
+                "language_model_output": gen_str,
+                "attack_iterations": num_steps - 1,
+                "is_JB": bool(first_success_iter is not None),
+            }
+        trace_meta = {
+            "first_success_iter": first_success_iter,
+            "snapshot_by_step": snapshot_by_step,
+        }
+        return (
+            final_payload["adv_prompt"],
+            final_payload["language_model_output"],
+            final_payload["attack_iterations"],
+            final_payload["is_JB"],
+            trace_meta,
+        )
+
+    return adv_suffix, gen_str, j, is_success, {}

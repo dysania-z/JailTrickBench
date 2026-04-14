@@ -16,6 +16,8 @@ import os
 import json
 import requests
 
+from utils.llm_api_env import get_deepseek_api_key, get_deepseek_chat_completions_url
+
 #### Download nltk data when first run ####
 nltk.download("stopwords")
 nltk.download("punkt")
@@ -234,13 +236,26 @@ def gpt_mutate(sentence, API_key=None):
     user_message = f'Please revise the following sentence with no changes to its length and only output the revised version, the sentences are: \n "{sentence}".\nPlease give me your revision directly without any explanation. Remember keep the original paragraph structure. Do not change the words "[REPLACE]", "[PROMPT]", "[KEEPER]", and "[MODEL]", if they are in the sentences.'
     revised_sentence = sentence
     received = False
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": "YOUR_KEY_HERE"}
+    # API_key 参数历史上可能传入模型名（如 gpt-3.5-turbo），不能直接当密钥用
+    if API_key and API_key.startswith("sk-"):
+        api_key = API_key
+    else:
+        api_key = get_deepseek_api_key()
+    url = get_deepseek_chat_completions_url()
+    if not api_key:
+        raise RuntimeError(
+            "gpt_mutate 需要 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。"
+        )
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
     messages = [
         {"role": "system", "content": system_msg},
         {"role": "user", "content": user_message},
     ]
-    mutate_model = "gpt-4" if API_key == "gpt-4" else "gpt-3.5-turbo"
+    #mutate_model = "gpt-4" if API_key == "gpt-4" else "gpt-3.5-turbo"
+    mutate_model = "deepseek-chat"
     data = {
         "model": mutate_model,
         "messages": messages,
@@ -319,6 +334,8 @@ def replace_with_synonyms(sentence, num=10):
         "tii",
         "chatgpt",
         "modelkeeper",
+        "deepseek-chat",
+        "deepseek-reasoner",
         "prompt",
     }
     stop_words = set(stopwords.words("english"))
@@ -400,6 +417,8 @@ def construct_momentum_word_dict(word_dict, control_suffixs, score_list, topk=-1
         "tii",
         "chatgpt",
         "modelkeeper",
+        "deepseek-chat",
+        "deepseek-reasoner",
         "prompt",
     }
     stop_words = set(stopwords.words("english"))
@@ -477,6 +496,8 @@ def replace_with_best_synonym(sentence, word_dict, crossover_probability):
         "falcon",
         "tii",
         "chatgpt",
+        "deepseek-chat",
+        "deepseek-reasoner",
         "modelkeeper",
         "prompt",
     }

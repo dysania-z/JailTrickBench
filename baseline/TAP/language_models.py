@@ -10,6 +10,7 @@ import urllib3
 from copy import deepcopy
 
 from .config import LLAMA_API_LINK, VICUNA_API_LINK
+from utils.llm_api_env import get_deepseek_api_key, get_deepseek_chat_completions_url
 import emoji
 import requests
 import json
@@ -231,8 +232,10 @@ class GPT(LanguageModel):
     API_MAX_RETRY = 2000
     API_TIMEOUT = 20
 
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": "YOUR_KEY_HERE"}
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.api_key = get_deepseek_api_key()
+        self.url = get_deepseek_chat_completions_url()
 
     def generate(
         self, conv: List[Dict], max_n_tokens: int, temperature: float, top_p: float
@@ -247,8 +250,15 @@ class GPT(LanguageModel):
             str: generated response
         """
         output = self.API_ERROR_OUTPUT
+        if not self.api_key:
+            raise RuntimeError(
+                "未设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，无法调用 TAP 云端模型。"
+            )
         url = self.url
-        headers = self.headers
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
         # filter text
         for i in range(len(conv)):
             if "content" in conv[i]:

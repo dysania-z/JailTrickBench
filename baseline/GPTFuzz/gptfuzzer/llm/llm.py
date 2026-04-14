@@ -9,6 +9,7 @@ from vllm import SamplingParams
 import google.generativeai as palm
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 import emoji
+import os
 import requests
 import json
 
@@ -347,10 +348,19 @@ class OpenAILLM(LLM):
             if system_message is not None
             else "You are a helpful assistant."
         )
-        self.url = "https://api.openai.com/v1/chat/completions"
+        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY") or os.getenv(
+            "OPENAI_API_KEY"
+        )
+        self.url = os.getenv(
+            "DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions"
+        )
+        if not self.api_key:
+            raise ValueError(
+                "OpenAILLM 需要 DEEPSEEK_API_KEY 或 OPENAI_API_KEY（或构造函数 api_key 参数）。"
+            )
         self.headers = {
             "Content-Type": "application/json",
-            "Authorization": "YOUR_KEY_HERE",
+            "Authorization": f"Bearer {self.api_key}",
         }
         self.API_TIMEOUT = 20
         self.top_p = 1.0

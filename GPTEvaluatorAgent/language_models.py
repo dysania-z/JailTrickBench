@@ -12,6 +12,7 @@ import re
 import emoji
 
 from GPTEvaluatorAgent.common import _extract_json
+from utils.llm_api_env import get_deepseek_api_key, get_deepseek_chat_completions_url
 
 
 def remove_code_blocks(text):
@@ -105,9 +106,11 @@ class ChatGPT(LanguageModel):
     API_QUERY_SLEEP = 0.5
     API_MAX_RETRY = 100
     API_TIMEOUT = 20
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Content-Type": "application/json", "Authorization": "YOUR_KEY_HERE"}
+
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.api_key = get_deepseek_api_key()
+        self.api_url = get_deepseek_chat_completions_url()
 
     def generate(
         self, conv: List[Dict], max_n_tokens: int, temperature: float, top_p: float
@@ -122,8 +125,14 @@ class ChatGPT(LanguageModel):
             str: generated response
         """
         output = self.API_ERROR_OUTPUT
-        url = self.url
-        headers = self.headers
+        if not self.api_key:
+            raise RuntimeError(
+                "未设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，无法调用 Agent 评估 API。"
+            )
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
         # filter text
         for i in range(len(conv)):
             if "content" in conv[i]:
@@ -145,7 +154,9 @@ class ChatGPT(LanguageModel):
                     "request_timeout": self.API_TIMEOUT,
                 }
 
-                response = requests.post(url, headers=headers, data=json.dumps(data))
+                response = requests.post(
+                    self.api_url, headers=headers, data=json.dumps(data)
+                )
                 print(f"""\n{'=' * 80}\n Response: {response}\n{'=' * 80}\n""")
                 response_json = response.json()
                 print(

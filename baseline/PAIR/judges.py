@@ -7,7 +7,7 @@ from system_prompts import get_judge_system_prompt
 from language_models import GPT
 
 def load_judge(args):
-    if "gpt" in args.judge_model:
+    if "gpt" in args.judge_model or "deepseek" in args.judge_model:
         return GPTJudge(args)
     elif args.judge_model == "no-judge":
         return NoJudge(args)
@@ -49,6 +49,10 @@ class NoJudge(JudgeBase):
 class GPTJudge(JudgeBase):
     def __init__(self, args):
         super(GPTJudge, self).__init__(args)
+        # 如果是gpt模型名，强制改为deepseek-chat
+        if "gpt" in self.judge_name:
+            print(f"[INFO] Judge模型从 {self.judge_name} 改为 deepseek-chat")
+            self.judge_name = "deepseek-chat"
         self.judge_model = GPT(model_name = self.judge_name)
 
     def create_conv(self, full_prompt):
